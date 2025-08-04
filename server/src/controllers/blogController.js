@@ -80,11 +80,20 @@ exports.getBlogStats = async (req, res) => {
 // @desc    Create new blog
 exports.createBlog = async (req, res) => {
   try {
-    const { title, content, excerpt, author, category, status, featuredImage, tags } = req.body;
-    console.log('Creating blog with data:', {
-      title, content, excerpt, author, category, status, featuredImage, tags
-    });
-    // Validate required fields
+    const {
+      title,
+      content,
+      excerpt,
+      author,
+      category,
+      status,
+      tags
+    } = req.body;
+
+    // ✅ Handle uploaded file
+    const featuredImage = req.file ? `/uploads/${req.file.filename}` : '';
+
+    // ✅ Validate required fields
     if (!title || !content || !author || !category) {
       return res.status(400).json({
         success: false,
@@ -100,7 +109,7 @@ exports.createBlog = async (req, res) => {
       category,
       status: status || 'draft',
       featuredImage,
-      tags: Array.isArray(tags) ? tags : [],
+      tags: typeof tags === 'string' ? tags.split(',').map(t => t.trim()) : [],
       views: 0,
       createdBy: req.user._id
     });
@@ -121,6 +130,9 @@ exports.createBlog = async (req, res) => {
     });
   }
 };
+ 
+
+
 
 // @desc    Get all blogs (public - only published)
 // exports.getAllBlogs = async (req, res) => {
@@ -191,7 +203,7 @@ exports.getAllBlogs = async (req, res) => {
       success: true,
       blogs
     });
-    console.log(`Fetched ${blogs.length} blogs ${blogs}`);
+    
   } catch (err) {
     console.error('Error fetching blogs:', err);
     res.status(500).json({
@@ -226,50 +238,32 @@ exports.getAdminBlogs = async (req, res) => {
 };
 
 // @desc    Get single blog by ID
-exports.getBlogById = async (req, res) => {
+// @desc    Get blog by slug
+exports.getBlogBySlug = async (req, res) => {
   try {
-    const blog = await Blog.findById(req.params.id);
+    const blog = await Blog.findOne({ slug: req.params.slug });
 
-    if (!blog) {
-      return res.status(404).json({
-        success: false,
-        message: "Blog not found"
-      });
+    if (!blog || (blog.status !== 'published' && (!req.user || req.user.role !== 'admin'))) {
+      return res.status(404).json({ success: false, message: "Blog not found" });
     }
 
-    // Only allow access to published blogs for non-admin users
-    if (blog.status !== 'published' && (!req.user || req.user.role !== 'admin')) {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
-    }
-
-    // Increment views for published blogs
+    // Increment views for public blogs
     if (blog.status === 'published') {
-      blog.views = (blog.views || 0) + 1;
+      blog.views += 1;
       await blog.save();
     }
 
-    res.json({
-      success: true,
-      blog
-    });
+    res.json({ success: true, blog });
   } catch (err) {
-    console.error('Error fetching blog:', err);
-    if (err.name === 'CastError') {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
-    }
+    console.error('Error fetching blog by slug:', err);
     res.status(500).json({
       success: false,
-      message: "Error fetching blog",
+      message: "Failed to get blog",
       error: err.message
     });
   }
 };
+
 
 // @desc    Update blog
 exports.updateBlog = async (req, res) => {
@@ -278,11 +272,14 @@ exports.updateBlog = async (req, res) => {
 
     const blog = await Blog.findById(req.params.id);
 
-    if (!blog) {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
+    if (title && title !== blog.title) {
+      const rawSlug = slugify(title, { lower: true, strict: true });
+      let slug = rawSlug;
+      let count = 1;
+      while (await Blog.exists({ slug, _id: { $ne: blog._id } })) {
+        slug = `${rawSlug}-${count++}`;
+      }
+      blog.slug = slug;
     }
 
     // Update fields

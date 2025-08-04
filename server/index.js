@@ -15,7 +15,7 @@ app.use('/api/users', require('./src/routes/user'));
 app.use("/api/blogs", require('./src/routes/blog'));
 app.use("/api/trending", require('./src/routes/trending'));
 app.use("/uploads", express.static("uploads"));
-
+app.use("/api/comments", require('./src/routes/comment'));
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

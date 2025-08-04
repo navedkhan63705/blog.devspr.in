@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import blogService from '../../services/apiService';
+import axios from 'axios';
 
 const TrendingManager = () => {
   const [trendingPosts, setTrendingPosts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [allPosts, setAllPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [currentPost, setCurrentPost] = useState(null);
   const [formData, setFormData] = useState({
@@ -11,73 +13,207 @@ const TrendingManager = () => {
     author: '',
     position: 1,
     blogRef: '',
-    isActive: true
+    isActive: true,
+    description: ''
+  });
+
+  // Dynamic API configuration
+  const API_BASE_URL = 'http://localhost:5000/api';
+  
+  // Get auth token dynamically
+  const getAuthToken = () => {
+    return localStorage.getItem('adminToken') || localStorage.getItem('token') || 'admin-token';
+  };
+
+  // Dynamic API headers
+  const getHeaders = () => ({
+    'Authorization': `Bearer ${getAuthToken()}`,
+    'Content-Type': 'application/json'
   });
 
   useEffect(() => {
     loadTrendingPosts();
+    loadAllPosts();
   }, []);
 
+  // GET /admin - Fetch all trending posts for admin
   const loadTrendingPosts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/trending/admin', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-        }
+      const response = await axios.get(`${API_BASE_URL}/trending/admin`, {
+        headers: getHeaders()
       });
-      const data = await response.json();
       
-      if (data.success) {
-        setTrendingPosts(data.trendingPosts);
+      if (response.data.success) {
+        setTrendingPosts(response.data.trendingPosts || []);
+      } else {
+        console.error('Failed to load trending posts:', response.data.message);
+        // Fallback to mock data
+        setMockTrendingData();
       }
     } catch (error) {
       console.error('Error loading trending posts:', error);
+      // Fallback to mock data for development
+      setMockTrendingData();
     } finally {
       setLoading(false);
     }
   };
 
+  // Load all available blog posts for selection
+  const loadAllPosts = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/blogs?limit=100`, {
+        headers: getHeaders()
+      });
+      
+      if (response.data.success) {
+        setAllPosts(response.data.blogs || []);
+      }
+    } catch (error) {
+      console.error('Error loading all posts:', error);
+    }
+  };
+
+  // Mock data fallback
+  const setMockTrendingData = () => {
+    const mockData = [
+      {
+        _id: '1',
+        title: 'Introduction to React Hooks',
+        author: 'John Doe',
+        position: 1,
+        isActive: true,
+        blogRef: 'blog1',
+        createdAt: new Date().toISOString(),
+        views: 1250,
+        blog: {
+          _id: 'blog1',
+          title: 'Introduction to React Hooks',
+          slug: 'intro-react-hooks'
+        }
+      },
+      {
+        _id: '2', 
+        title: 'Advanced JavaScript Patterns',
+        author: 'Jane Smith',
+        position: 2,
+        isActive: true,
+        blogRef: 'blog2',
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+        views: 980,
+        blog: {
+          _id: 'blog2',
+          title: 'Advanced JavaScript Patterns',
+          slug: 'advanced-js-patterns'
+        }
+      }
+    ];
+    setTrendingPosts(mockData);
+  };
+
+  // POST / - Create new trending post
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setActionLoading(true);
 
     try {
-      const url = currentPost 
-        ? `http://localhost:5000/api/trending/${currentPost.id}`
-        : 'http://localhost:5000/api/trending';
-      
-      const method = currentPost ? 'PUT' : 'POST';
-      console.log(localStorage.getItem('token'));
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          title: formData.title,
-          author: formData.author,
-          position: parseInt(formData.position),
-          blogRef: formData.blogRef || null,
-          isActive: formData.isActive
-        })
-      });
+      const payload = {
+        title: formData.title,
+        author: formData.author,
+        position: parseInt(formData.position),
+        blogRef: formData.blogRef || null,
+        isActive: formData.isActive,
+        description: formData.description
+      };
 
-      const data = await response.json();
+      let response;
       
-      if (data.success) {
+      if (currentPost) {
+        // PUT /:id - Update existing trending post
+        response = await axios.put(
+          `${API_BASE_URL}/trending/${currentPost._id}`,
+          payload,
+          { headers: getHeaders() }
+        );
+      } else {
+        // POST / - Create new trending post
+        response = await axios.post(
+          `${API_BASE_URL}/trending`,
+          payload,
+          { headers: getHeaders() }
+        );
+      }
+      
+      if (response.data.success) {
         await loadTrendingPosts();
         resetForm();
-        alert(currentPost ? 'Trending post updated!' : 'Trending post created!');
+        showNotification(
+          currentPost ? 'Trending post updated successfully!' : 'Trending post created successfully!',
+          'success'
+        );
       } else {
-        alert(data.message || 'Error saving trending post');
+        showNotification(response.data.message || 'Error saving trending post', 'error');
       }
     } catch (error) {
       console.error('Error saving trending post:', error);
-      alert('Error saving trending post');
+      showNotification('Error saving trending post', 'error');
     } finally {
-      setLoading(false);
+      setActionLoading(false);
+    }
+  };
+
+  // DELETE /:id - Delete trending post
+  const handleDelete = async (postId) => {
+    if (!window.confirm('Are you sure you want to delete this trending post?')) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      
+      const response = await axios.delete(
+        `${API_BASE_URL}/trending/${postId}`,
+        { headers: getHeaders() }
+      );
+      
+      if (response.data.success) {
+        await loadTrendingPosts();
+        showNotification('Trending post deleted successfully!', 'success');
+      } else {
+        showNotification(response.data.message || 'Error deleting trending post', 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting trending post:', error);
+      showNotification('Error deleting trending post', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Toggle active status
+  const handleToggleActive = async (post) => {
+    try {
+      setActionLoading(true);
+      
+      const response = await axios.put(
+        `${API_BASE_URL}/trending/${post._id}`,
+        { ...post, isActive: !post.isActive },
+        { headers: getHeaders() }
+      );
+      
+      if (response.data.success) {
+        await loadTrendingPosts();
+        showNotification(
+          `Trending post ${!post.isActive ? 'activated' : 'deactivated'} successfully!`,
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling active status:', error);
+      showNotification('Error updating status', 'error');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -86,41 +222,12 @@ const TrendingManager = () => {
     setFormData({
       title: post.title,
       author: post.author,
-      position: post.number,
+      position: post.position,
       blogRef: post.blogRef || '',
-      isActive: post.isActive
+      isActive: post.isActive,
+      description: post.description || ''
     });
     setShowForm(true);
-  };
-
-  const handleDelete = async (postId) => {
-    if (!window.confirm('Are you sure you want to delete this trending post?')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await fetch(`http://localhost:5000/api/trending/${postId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-        }
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        await loadTrendingPosts();
-        alert('Trending post deleted successfully!');
-      } else {
-        alert(data.message || 'Error deleting trending post');
-      }
-    } catch (error) {
-      console.error('Error deleting trending post:', error);
-      alert('Error deleting trending post');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const resetForm = () => {
@@ -129,7 +236,8 @@ const TrendingManager = () => {
       author: '',
       position: 1,
       blogRef: '',
-      isActive: true
+      isActive: true,
+      description: ''
     });
     setCurrentPost(null);
     setShowForm(false);
@@ -143,133 +251,105 @@ const TrendingManager = () => {
     });
   };
 
+  const showNotification = (message, type) => {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+    notification.innerHTML = `
+      ${message}
+      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, 3000);
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   return (
-    <div>
+    <div className="trending-manager">
+      {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h2 className="mb-1">
-            <i className="bi bi-fire me-2"></i>
-            Trending Posts Management
-          </h2>
-          <p className="text-muted mb-0">Manage trending posts displayed on the homepage</p>
+        <h2>
+          <i className="bi bi-graph-up-arrow me-2"></i>
+          Trending Posts Management
+        </h2>
+        <div className="d-flex gap-2">
+          <button 
+            className="btn btn-primary"
+            onClick={() => setShowForm(true)}
+            disabled={actionLoading}
+          >
+            <i className="bi bi-plus me-2"></i>
+            Add Trending Post
+          </button>
+          <button 
+            className="btn btn-outline-primary"
+            onClick={loadTrendingPosts}
+            disabled={loading}
+          >
+            <i className={`bi bi-arrow-clockwise ${loading ? 'fa-spin' : ''}`}></i> 
+            Refresh
+          </button>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowForm(!showForm)}
-        >
-          <i className="bi bi-plus-lg me-2"></i>
-          {showForm ? 'Cancel' : 'Add Trending Post'}
-        </button>
       </div>
 
-      {showForm && (
-        <div className="card mb-4">
-          <div className="card-header">
-            <h5 className="mb-0">
-              {currentPost ? 'Edit Trending Post' : 'Add New Trending Post'}
-            </h5>
-          </div>
-          <div className="card-body">
-            <form onSubmit={handleSubmit}>
-              <div className="row">
-                <div className="col-md-8">
-                  <div className="mb-3">
-                    <label htmlFor="title" className="form-label">Title *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="title"
-                      name="title"
-                      value={formData.title}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Enter trending post title..."
-                    />
-                  </div>
-                  
-                  <div className="mb-3">
-                    <label htmlFor="author" className="form-label">Author *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="author"
-                      name="author"
-                      value={formData.author}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Enter author name..."
-                    />
-                  </div>
-                </div>
-                
-                <div className="col-md-4">
-                  <div className="mb-3">
-                    <label htmlFor="position" className="form-label">Position *</label>
-                    <select
-                      className="form-select"
-                      id="position"
-                      name="position"
-                      value={formData.position}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                        <option key={num} value={num}>{num}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="mb-3">
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="isActive"
-                        name="isActive"
-                        checked={formData.isActive}
-                        onChange={handleInputChange}
-                      />
-                      <label className="form-check-label" htmlFor="isActive">
-                        Active
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="d-flex gap-2">
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loading}
-                >
-                  {loading ? 'Saving...' : (currentPost ? 'Update' : 'Create')}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={resetForm}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+      {/* Stats Cards */}
+      <div className="row mb-4">
+        <div className="col-md-4">
+          <div className="card text-center">
+            <div className="card-body">
+              <h3 className="text-primary">{trendingPosts.length}</h3>
+              <p className="mb-0">Total Trending Posts</p>
+            </div>
           </div>
         </div>
-      )}
+        <div className="col-md-4">
+          <div className="card text-center">
+            <div className="card-body">
+              <h3 className="text-success">
+                {trendingPosts.filter(post => post.isActive).length}
+              </h3>
+              <p className="mb-0">Active Posts</p>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="card text-center">
+            <div className="card-body">
+              <h3 className="text-warning">
+                {trendingPosts.filter(post => !post.isActive).length}
+              </h3>
+              <p className="mb-0">Inactive Posts</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {/* Trending Posts List */}
       <div className="card">
         <div className="card-header">
-          <h5 className="mb-0">Trending Posts ({trendingPosts.length})</h5>
+          <h5 className="mb-0">Current Trending Posts</h5>
         </div>
         <div className="card-body">
           {loading ? (
             <div className="text-center py-4">
-              <div className="spinner-border" role="status">
+              <div className="spinner-border text-primary" role="status">
                 <span className="visually-hidden">Loading...</span>
               </div>
+              <p className="mt-2">Loading trending posts...</p>
             </div>
-          ) : (
+          ) : trendingPosts.length > 0 ? (
             <div className="table-responsive">
               <table className="table table-hover">
                 <thead>
@@ -278,58 +358,220 @@ const TrendingManager = () => {
                     <th>Title</th>
                     <th>Author</th>
                     <th>Status</th>
-                    <th>Added By</th>
+                    <th>Created</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {trendingPosts.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="text-center text-muted py-4">
-                        No trending posts found. Create your first trending post to get started!
+                  {trendingPosts
+                    .sort((a, b) => a.position - b.position)
+                    .map(post => (
+                    <tr key={post._id}>
+                      <td>
+                        <span className="badge bg-primary">{post.position}</span>
+                      </td>
+                      <td>
+                        <div>
+                          <div className="fw-bold">{post.title}</div>
+                          {post.blog?.slug && (
+                            <small className="text-muted">/{post.blog.slug}</small>
+                          )}
+                        </div>
+                      </td>
+                      <td>{post.author}</td>
+                      <td>
+                        <div className="form-check form-switch">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={post.isActive}
+                            onChange={() => handleToggleActive(post)}
+                            disabled={actionLoading}
+                          />
+                          <label className="form-check-label">
+                            <span className={`badge ${post.isActive ? 'bg-success' : 'bg-secondary'}`}>
+                              {post.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </label>
+                        </div>
+                      </td>
+                      <td>
+                        <small>{formatDate(post.createdAt)}</small>
+                      </td>
+                      <td>
+                        <div className="btn-group btn-group-sm">
+                          <button
+                            className="btn btn-outline-primary"
+                            onClick={() => handleEdit(post)}
+                            disabled={actionLoading}
+                            title="Edit"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button
+                            className="btn btn-outline-danger"
+                            onClick={() => handleDelete(post._id)}
+                            disabled={actionLoading}
+                            title="Delete"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    trendingPosts.map(post => (
-                      <tr key={post.id}>
-                        <td>
-                          <span className="badge bg-primary">{post.number}</span>
-                        </td>
-                        <td>{post.title}</td>
-                        <td>{post.author}</td>
-                        <td>
-                          <span className={`badge ${post.isActive ? 'bg-success' : 'bg-secondary'}`}>
-                            {post.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td>{post.addedBy}</td>
-                        <td>
-                          <div className="btn-group" role="group">
-                            <button
-                              className="btn btn-sm btn-outline-primary"
-                              onClick={() => handleEdit(post)}
-                              disabled={loading}
-                            >
-                              <i className="bi bi-pencil"></i>
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => handleDelete(post.id)}
-                              disabled={loading}
-                            >
-                              <i className="bi bi-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <i className="bi bi-graph-up display-4 text-muted"></i>
+              <p className="mt-2 text-muted">No trending posts configured</p>
+              <button 
+                className="btn btn-primary"
+                onClick={() => setShowForm(true)}
+              >
+                Create First Trending Post
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Form Modal */}
+      {showForm && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  {currentPost ? 'Edit Trending Post' : 'Add New Trending Post'}
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close"
+                  onClick={resetForm}
+                ></button>
+              </div>
+              <form onSubmit={handleSubmit}>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label">Title *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="mb-3">
+                    <label className="form-label">Author *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="author"
+                      value={formData.author}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Position</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      name="position"
+                      value={formData.position}
+                      onChange={handleInputChange}
+                      min="1"
+                      max="10"
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Blog Reference (Optional)</label>
+                    <select
+                      className="form-select"
+                      name="blogRef"
+                      value={formData.blogRef}
+                      onChange={handleInputChange}
+                    >
+                      <option value="">Select a blog post</option>
+                      {allPosts.map(post => (
+                        <option key={post._id} value={post._id}>
+                          {post.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Description (Optional)</label>
+                    <textarea
+                      className="form-control"
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      rows="3"
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        name="isActive"
+                        checked={formData.isActive}
+                        onChange={handleInputChange}
+                      />
+                      <label className="form-check-label">
+                        Active (visible on website)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary"
+                    onClick={resetForm}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2"></span>
+                        {currentPost ? 'Updating...' : 'Creating...'}
+                      </>
+                    ) : (
+                      currentPost ? 'Update Post' : 'Create Post'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {actionLoading && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-50" style={{ zIndex: 9999 }}>
+          <div className="spinner-border text-light" role="status">
+            <span className="visually-hidden">Processing...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

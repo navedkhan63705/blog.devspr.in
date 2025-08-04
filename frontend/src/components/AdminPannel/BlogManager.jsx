@@ -19,7 +19,7 @@ const BlogManager = () => {
   const loadBlogs = async () => {
     try {
       setInitialLoading(true);
-      const blogsData = await blogService.getAdminBlogs();
+      const blogsData = await blogService.getAllBlogs();
       setBlogs(blogsData);
     } catch (error) {
       console.error('Error loading blogs:', error);
@@ -164,21 +164,21 @@ const BlogManager = () => {
   // Filter blogs with proper error handling
   const filteredBlogs = blogs.filter(blog => {
     if (!blog || typeof blog !== 'object') return false;
-    
+
     const title = String(blog.title || '').toLowerCase();
     const content = String(blog.content || '').toLowerCase();
     const authorName = getAuthorName(blog.author).toLowerCase();
     const tags = Array.isArray(blog.tags) ? blog.tags : [];
     const searchLower = searchTerm.toLowerCase();
-    
+
     const matchesSearch = title.includes(searchLower) ||
       content.includes(searchLower) ||
       authorName.includes(searchLower) ||
       tags.some(tag => String(tag).toLowerCase().includes(searchLower));
-    
+
     const matchesStatus = filterStatus === 'all' || blog.status === filterStatus;
     const matchesCategory = filterCategory === 'all' || blog.category === filterCategory;
-    
+
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
@@ -294,7 +294,7 @@ const BlogManager = () => {
                       const blogId = blog._id;
                       const tags = Array.isArray(blog.tags) ? blog.tags : [];
                       const authorName = getAuthorName(blog.author);
-                      
+
                       return (
                         <tr key={blogId}>
                           <td>
@@ -327,9 +327,9 @@ const BlogManager = () => {
                                 )}
                                 <div className="mt-1">
                                   {tags.slice(0, 3).map((tag, index) => (
-                                    <span 
-                                      key={`${blogId}-tag-${index}`} 
-                                      className="badge bg-light text-dark me-1" 
+                                    <span
+                                      key={`${blogId}-tag-${index}`}
+                                      className="badge bg-light text-dark me-1"
                                       style={{ fontSize: '0.7rem' }}
                                     >
                                       {String(tag)}
@@ -632,14 +632,14 @@ const BlogForm = ({ formData, currentBlog, loading, onInputChange, onSubmit, onC
             <div className="mb-3">
               <label htmlFor="featuredImage" className="form-label fw-bold">Featured Image URL</label>
               <input
-                type="url"
+                type="file"
                 className="form-control admin-form-control"
                 id="featuredImage"
                 name="featuredImage"
                 value={formData.featuredImage || ''}
                 onChange={onInputChange}
-                placeholder="https://example.com/image.jpg"
               />
+
               <div className="form-text">
                 Optional. Use a high-quality image (recommended: 800x400px).
               </div>

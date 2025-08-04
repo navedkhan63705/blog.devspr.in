@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
+const slugify = require('slugify');
 
 const blogSchema = new mongoose.Schema({
+    slug: {
+    type: String,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
   title: {
     type: String,
     required: [true, 'Title is required'],
@@ -76,24 +83,31 @@ const blogSchema = new mongoose.Schema({
 });
 
 // Calculate read time before saving
-blogSchema.pre('save', function(next) {
+// ✅ Generate slug from title before saving
+blogSchema.pre('save', async function (next) {
+  if (this.isModified('title') || this.isNew) {
+    const rawSlug = slugify(this.title, { lower: true, strict: true });
+    let slug = rawSlug;
+    let count = 1;
+
+    // Ensure uniqueness by appending a number if needed
+    while (await mongoose.models.Blog.exists({ slug })) {
+      slug = `${rawSlug}-${count++}`;
+    }
+
+    this.slug = slug;
+  }
+
+  // Read time calculation
   if (this.isModified('content')) {
     const wordsPerMinute = 200;
     const wordCount = this.content.split(/\s+/).length;
     const readTime = Math.ceil(wordCount / wordsPerMinute);
     this.readTime = `${readTime} min read`;
   }
+
   next();
 });
+// ...everything you've written above...
 
-// Index for search functionality
-blogSchema.index({ 
-  title: 'text', 
-  content: 'text', 
-  tags: 'text' 
-});
-
-blogSchema.index({ status: 1, createdAt: -1 });
-blogSchema.index({ category: 1 });
-
-module.exports = mongoose.model('Blog', blogSchema);
+module.exports = mongoose.model('Blog', blogSchema); // ✅ ADD THIS LINE

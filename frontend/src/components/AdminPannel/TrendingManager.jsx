@@ -18,7 +18,7 @@ const TrendingManager = () => {
   });
 
   // Dynamic API configuration
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const API_BASE_URL = 'https://blog-devspr-in.onrender.com/api';
   
   // Get auth token dynamically
   const getAuthToken = () => {

@@ -52,13 +52,13 @@ const SinglePost = () => {
   useEffect(() => {
     const fetchBlog = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/blogs/slug/${slug}`);
+        const response = await axios.get(`https://blog-devspr-in.onrender.com/api/blogs/slug/${slug}`);
         setBlogPost(response.data.blog);
         
         // Fetch related posts
         if (response.data.blog?.category) {
           const relatedResponse = await axios.get(
-            `http://localhost:5000/api/blogs?category=${response.data.blog.category}&limit=3`
+            `https://blog-devspr-in.onrender.com/blogs?category=${response.data.blog.category}&limit=3`
           );
           setRelatedPosts(relatedResponse.data.blogs?.filter(post => post.slug !== slug) || []);
         }
@@ -85,7 +85,7 @@ const SinglePost = () => {
     
     setCommentsLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/comments/blog/${blogPost._id}`);
+      const response = await axios.get(`https://blog-devspr-in.onrender.com/api/comments/blog/${blogPost._id}`);
       setComments(response.data.comments || []);
     } catch (error) {
       console.error('Failed to fetch comments:', error);
@@ -115,7 +115,7 @@ const SinglePost = () => {
         content: commentForm.comment
       };
 
-      const response = await axios.post('http://localhost:5000/api/comments', commentData);
+      const response = await axios.post('https://blog-devspr-in.onrender.com/api/comments', commentData);
       
       if (response.data.success) {
         // Add new comment to the beginning of comments array

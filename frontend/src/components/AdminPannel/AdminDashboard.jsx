@@ -45,10 +45,10 @@
           usersResponse,
           analyticsResponse
         ] = await Promise.allSettled([
-          axios.get('http://localhost:5000/api/blogs/stats'),
-          axios.get('http://localhost:5000/api/comments/stats'),
-          axios.get('http://localhost:5000/api/users/stats'),
-          axios.get('http://localhost:5000/api/analytics/dashboard')
+          axios.get('https://blog-devspr-in.onrender.com/api/blogs/stats'),
+          axios.get('https://blog-devspr-in.onrender.com/api/comments/stats'),
+          axios.get('https://blog-devspr-in.onrender.com/api/users/stats'),
+          axios.get('https://blog-devspr-in.onrender.com/api/analytics/dashboard')
         ]);
 
         // Process blog stats

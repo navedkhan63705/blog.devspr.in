@@ -97,7 +97,7 @@ const HeroSlider = ({ searchQuery, onSearchStateChange }) => {
         return blog.image;
       }
       // If it's a relative path, construct the full URL
-      return `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${blog.image}`;
+      return `${process.env.REACT_APP_API_URL || 'https://blog-devspr-in.onrender.com'}${blog.image}`;
     }
     // Default placeholder image
     return 'https://via.placeholder.com/400x200/007bff/ffffff?text=Blog+Image';

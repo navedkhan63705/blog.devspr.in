@@ -35,7 +35,7 @@ const CommentManager = () => {
         ...(searchTerm && { search: searchTerm })
       });
 
-      const response = await axios.get(`http://localhost:5000/api/comments?${params}`, {
+      const response = await axios.get(`https://blog-devspr-in.onrender.com/api/comments?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || 'admin-token'}`,
           'Content-Type': 'application/json'
@@ -62,7 +62,7 @@ const CommentManager = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/comments/stats', {
+      const response = await axios.get('https://blog-devspr-in.onrender.com/api/comments/stats', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || 'admin-token'}`,
           'Content-Type': 'application/json'
